@@ -24,11 +24,12 @@ class Ts_engine():
         self.ts = ts
 
     def get_price(self, date, ts_code):
+        time.sleep(0.5)
         # dt_obj = datetime.datetime.strptime(date, '%Y%m%d')
         # delta = datetime.timedelta(days=1)
         # n_days = dt_obj + delta
         df = self.pro.daily(trade_date=date, ts_code=str(ts_code))
-        print('trade_date=',date, '<=>ts_code=',str(ts_code), '<=>date=', date)
+        # print('trade_date=',date, '<=>ts_code=',str(ts_code), '<=>date=', date)
         try:
             ts_code, trade_date, open_price, high, low, close_price, pre_close, change, pct_chg, vol, amount = df.values[0]
             return open_price, close_price
@@ -71,19 +72,38 @@ class Stock():
         return ('.'.join([self.id, self.location]))
 
 def list_check(live_stock, date):
-    global money
     clear_list = []
+    global BASE_DATE
     for stock in live_stock:
         if stock.amount > 0:
             clear_list.append(stock)
+        else:
+            print('***Stock [%s] has been removed from tracking list***' % stock)
     diff = 5 - len(clear_list)
     if diff > 0:
         for i in range(diff):
-            backup_stock = random.choice(stock_symbols)
-            open_price, close_price = ts.get_price(BASE_DATE, backup_stock)
-            stock = Stock(backup_stock, BASE_DATE, 0, 0)
-            # money -= open_price * 100
-            clear_list.append(stock)
+            loop_counter = 0
+            while True:
+                backup_stock = random.choice(stock_symbols)
+                print('Attempt stock [%s]  ' % backup_stock, end='')
+                open_price, close_price = ts.get_price(BASE_DATE, backup_stock)
+                print('Parse stock [%s] on [%s]   ' % (backup_stock, BASE_DATE), end='')
+                if open_price != 0 and close_price != 0:
+                    stock = Stock(backup_stock, BASE_DATE, 0, 0)
+                    clear_list.append(stock)
+                    print('Add new stock in tracing list [%s]' % backup_stock)
+                    break
+                else:
+                    print('No trade date is available for stock [%s]' % backup_stock)
+                    loop_counter += 1
+                    print('loop_counter>', loop_counter)
+                    if loop_counter >= 3:
+                        dt_obj = datetime.datetime.strptime(BASE_DATE, '%Y%m%d')
+                        delta = datetime.timedelta(days=1)
+                        BASE_DATE = dt_obj + delta
+                        print('MID BASE_DATE>>', BASE_DATE)
+                        BASE_DATE = BASE_DATE.strftime('%Y%m%d')
+                        loop_counter = 0
     return clear_list
 
 ts = Ts_engine()
@@ -96,9 +116,10 @@ ts = Ts_engine()
 
 
 for i in range(300):
-    print(live_stock)
+    for i in live_stock:
+        print('<%s - %s> ' % (i.ts_code(), i.amount), end='')
+    print('')
     for stock in live_stock:
-        time.sleep(0.5)
         open_price, close_price = ts.get_price(BASE_DATE, stock)
         if open_price != 0:
             if stock.income_flag == True:
@@ -107,20 +128,25 @@ for i in range(300):
                 money -= open_price * 100
                 stock.income_flag = False
                 stock.last_op_data = BASE_DATE
+                print('Execute ADD OPERATION')
             if stock.outgoing_flag == True:
                 stock.reduce(100, open_price)
                 money += open_price * 100
                 stock.price = open_price
                 stock.outgoing_flag = False
                 stock.last_op_data = BASE_DATE
+                print('Execute REDUCE OPERATION')
             if (close_price - stock.price)/stock.price >= 0.03 and stock.init_date != BASE_DATE:
                 stock.income_flag = True
             elif (close_price - stock.price)/stock.price <= -0.03 and stock.init_date != BASE_DATE:
                 stock.outgoing_flag = True
+    live_stock = list_check(live_stock, BASE_DATE)
 
     dt_obj = datetime.datetime.strptime(BASE_DATE, '%Y%m%d')
-    delta = datetime.timedelta(days=1)
+    if dt_obj.weekday() == 4:
+        delta = datetime.timedelta(days=3)
+    else:
+        delta = datetime.timedelta(days=1)
     BASE_DATE = dt_obj + delta
     BASE_DATE = BASE_DATE.strftime('%Y%m%d')
-
-    live_stock = list_check(live_stock, date)
+    print('MONEY is [%s]  Date is [%s]' % (money, BASE_DATE))
